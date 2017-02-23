@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="content-style-type" content="text/css">
+<meta http-equiv="content-script-type" content="text/javascript">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="author" content="orfeon">
+<title>Reversi Player</title>
+<style>
+
+#menu {
+  padding: 5px 0;
+}
+#menu button {
+  border:2px solid #dce8c4;
+  background-color:#fcfcfc;
+  cursor: pointer;
+}
+#menu button.mystone {
+  background-color: #ffa07a;
+}
+#menu span {
+  padding-left: 30px;
+  text-align: right;
+}
+#main {
+  position: relative;
+  margin: 0;
+  width: 320px;
+  height: 320px;
+}
+#board_back_canvas_wrap {
+  position: relative;
+  padding: 0;
+  margin: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  background: green;
+}
+#board_back_canvas {
+
+}
+#board {
+  width: 320px;
+  height: 320px;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  z-index: 1;
+  float: left;
+}
+#board div.stone {
+  width: 36px;
+  height: 36px;
+  float: left;
+  margin: 2px;
+  background-color:#34ac98;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  -moz-border-radius: 50%;
+  box-shadow: rgba(0,0,0,.5) 2px 2px 4px 2px;
+  -webkit-box-shadow: rgba(0,0,0,.5) 2px 2px 4px 2px;
+  -moz-box-shadow: rgba(0,0,0,.5) 2px 2px 4px 2px;
+}
+#board div.stone.white {
+  background-color: white;
+}
+#board div.stone.black {
+  background-color: black;
+}
+#board div.stone.blank {
+  background: none;
+  border: none;
+  border-radius: 0%;
+  -webkit-border-radius: 0%;
+  -moz-border-radius: 0%;
+  box-shadow: none;
+  -webkit-box-shadow: none;
+  -moz-box-shadow: none;
+  cursor: pointer;
+}
+#board div.stone.blank.movable:hover {
+ background: #f83b66;
+ /*
+ transition:1.0s;
+　-moz-transition:1.0s;
+　-webkit-transition:1.0s;
+ */
+}
+#board div.stone.epos {
+  background: #808080;
+}
+</style>
+</head>
+
+<body>
+<div id="container">
+  <div id="menu">
+    <button type=button class="black mystone">black</button>
+    <button type=button class="white">white</button>
+    <span id="scorelabel">black: 2 vs 2 :white</span>
+  </div>
+  <div id="main">
+    <div id="board"></div>
+    <div id="board_back_canvas_wrap"><canvas id="board_back_canvas" width="320" height="320"></canvas></div>
+  </div>
+  <div>
+    <button id="backbutton" type=button>back</button>
+  </div>
+  <div id="history">
+  </div>
+</div>
+
+<script id="board_tmpl" type="text/x-jsrender">
+<div class="stone {{if stone==1}}white{{else stone==2}}black{{else}}blank{{/if}}{{if movable==1}} movable{{/if}}{{if epos==1}}epos{{/if}}" index="{{>#index}}" stone="{{:stone}}"></div>
+</script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
+<script src="https://www.jsviews.com/download/jsrender.min.js"></script>
+<script>
+(function($){
+
+var history_list = [];
+
+var initcanvas = function() {
+  var canvas = document.getElementById('board_back_canvas');
+    if (canvas.getContext) {
+      var context = canvas.getContext('2d');
+      for(var i=0; i<9; i++) {
+        context.beginPath();
+        //context.lineWidth = 1;
+        context.moveTo(40*i, 0);
+        context.lineTo(40*i, 320);
+        context.stroke();
+      };
+      for(var i=0; i<9; i++) {
+        context.beginPath();
+        context.moveTo(0, 40*i);
+        context.lineTo(320, 40*i);
+        context.stroke();
+      };
+    }
+};
+
+var initboard = function() {
+  var stones = []
+  for(var i=0; i<64; i++) {
+    var stone = {index: i, stone: 0, movable: 0};
+    if(i == 27 || i == 36) {
+      stone.stone = 1;
+    } else if(i == 28 || i == 35) {
+      stone.stone = 2;
+    };
+    if(i == 19 || i == 26 || i == 37 || i == 44) {
+      stone.movable = 1;
+    };
+    stones.push(stone)
+  };
+  return {mystone: -1, stone: -1, stones: stones};
+};
+
+var render = function(data) {
+  var tmpl = $.templates("#board_tmpl");
+  var html = tmpl.render(data.stones);
+  console.log(data)
+  $("#board").html(html);
+  var black_num = 0, white_num = 0;
+  for(var i=0; i<64; i++) {
+    var stone = data.stones[i].stone;
+    if(stone == 2) {
+      black_num += 1;
+    } else if(stone == 1) {
+      white_num += 1;
+    }
+  };
+  var scoretext = "black: " + black_num + " vs " + white_num + " :white";
+  $("#scorelabel").text(scoretext);
+};
+
+var send = function(data, callback) {
+  $.ajax({
+    url: "http://localhost:8080",
+    data: data,
+    type: "GET",
+    dataType: "json",
+    contentType: "application/x-www-form-urlencoded",
+    cache: false,
+    timeout: 3000,
+    //processData: false,
+    success: function(result){
+      callback(result);
+    },
+    error: function(XMLHttpRequest, status, errorThrown){
+    }});
+};
+
+var getboard = function() {
+  var stonelist = []
+  $("#board .stone").each(function(index, elm){
+    var $elm = $(this);
+    stonelist.push(parseInt($elm.attr("stone")));
+  });
+  console.log(stonelist)
+};
+
+$("#menu").on("click", "button", function(e){
+  $("#menu button").removeClass("mystone");
+  $button = $(this);
+  $button.addClass("mystone");
+  board = initboard();
+  if($button.hasClass("white")) {
+    board.mystone = 1;
+    send({stone: board.mystone, stones: board.stones}, function(result){
+
+    });
+
+  };
+});
+
+var sendstone = function(pos) {
+
+  var stonelist = [];
+  for(var i=0; i<64; i++) {
+    stonelist.push(board.stones[i].stone);
+  }
+  var stonesstr = stonelist.join('');
+  var data = {stone: board.mystone, pos: pos, stones: stonesstr};
+  history_list.push(board.stones.concat());
+
+  send(data, function(result){
+    var stoneslist = [];
+    var prestoneslist = [];
+    var movable_poscount = 0;
+    for(var i=0; i<64; i++) {
+      var stone = {index: i, stone: parseInt(result.stones[i]), movable: parseInt(result.movables[i]), epos: 0};
+      var prestone = {index: i, stone: parseInt(result.pre_stones[i]), epos: 0};
+      movable_poscount += parseInt(result.movables[i]);
+      if(result.pos > 0 && result.pos == i) {
+        prestone.epos = 1;
+      };
+      stoneslist.push(stone);
+      prestoneslist.push(prestone)
+    }
+    var pre_res_data = {mystone: board.mystone, stones: prestoneslist};
+    render(pre_res_data)
+
+    setTimeout(function(){
+      var res_data = {mystone: board.mystone, stones: stoneslist};
+      board.stones = stoneslist;
+      render(res_data);
+      if(result.gameover) {
+
+        var black_num = 0, white_num = 0;
+        for(var i=0; i<64; i++) {
+          var stone = data.stones[i].stone;
+          if(stone == 2) {
+            black_num += 1;
+          } else if(stone == 1) {
+            white_num += 1;
+          }
+        };
+        var message = "You ";
+        if(black_num > white_num) {
+          message = message + "Win!";
+        } else if(black_num < white_num) {
+          message = message + "Lose!";
+        } else {
+          message = message + "Draw!"
+        }
+        alert(message);
+      } else if(movable_poscount == 0) {
+        alert("No place you can put stone! skip your turn.");
+        sendstone(-1);
+      };
+    }, 1000);
+
+  });
+
+};
+
+$("#board").on("click", ".stone", function(e){
+  var $stone = $(this);
+  if(!$stone.hasClass("movable")) {
+    return;
+  };
+  var pos = $stone.attr("index");
+  sendstone(pos);
+});
+
+$("#backbutton").on("click", function(e){
+  if(history.length == 0) {
+    return;
+  };
+  var prev_stoneslist = history_list.pop();
+  board.stones = prev_stoneslist;
+  var viewdata = {mystone: board.mystone, stones: prev_stoneslist};
+  render(viewdata);
+});
+
+var board = initboard();
+render(board)
+
+initcanvas();
+
+})(jQuery);
+</script>
+</body>
+</html>
